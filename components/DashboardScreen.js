@@ -142,7 +142,27 @@ function RecommendationCard({ text, accentClass }) {
   );
 }
 
-export default function DashboardScreen({ analysis, onReset, streak, questStates, onToggleQuest }) {
+function WeeklyBar({ day, value }) {
+  const tone = getStrengthTone(value);
+  return (
+    <View className="flex-1 items-center px-1">
+      <Text className="mb-2 text-[10px] font-bold text-textMuted">{value}</Text>
+      <View className="h-32 w-full items-center justify-end rounded-full bg-white/70 px-1 py-1">
+        <View className={`w-full rounded-full ${tone.bar}`} style={{ height: `${Math.max(12, value)}%` }} />
+      </View>
+      <Text className="mt-2 text-[10px] font-semibold text-textMuted">{day}</Text>
+    </View>
+  );
+}
+
+export default function DashboardScreen({
+  analysis,
+  onReset,
+  streak,
+  questStates,
+  onToggleQuest,
+  weeklyProgress = [],
+}) {
   const colorKey = analysis?.colorKey || 'low';
   const theme = THEME[colorKey];
   const recommendations = RECOMMENDATIONS[colorKey];
@@ -185,7 +205,7 @@ export default function DashboardScreen({ analysis, onReset, streak, questStates
     setSecondsLeft(BREATHING_STEPS[0].duration);
 
     const timer = setInterval(() => {
-      setSecondsLeft((currentSeconds) => currentSeconds - 1);
+      setSecondsLeft((currentSeconds) => Math.max(0, currentSeconds - 1));
     }, 1000);
 
     return () => clearInterval(timer);
@@ -287,6 +307,27 @@ export default function DashboardScreen({ analysis, onReset, streak, questStates
           {RESILIENCE_QUESTS.map((quest, index) => (
             <QuestItem key={quest} label={quest} completed={Boolean(questStates?.[index])} onPress={() => onToggleQuest(index)} />
           ))}
+        </View>
+      </View>
+
+      <View className="mt-4 rounded-[28px] border border-yesilayGreen/10 bg-white px-5 py-5 shadow-soft">
+        <Text className="text-xl font-bold text-textMain">Son 7 Günlük İlerleme</Text>
+        <Text className="mt-2 text-sm leading-6 text-textMuted">
+          Haftalık dayanıklılık değişimini hızlıca gözlemleyebilirsin.
+        </Text>
+
+        <View className="mt-5 rounded-[24px] bg-yesilayLight px-4 py-5">
+          <View className="flex-row items-end justify-between">
+            {weeklyProgress.map((item) => (
+              <WeeklyBar key={item.day} day={item.day} value={item.value} />
+            ))}
+          </View>
+          <View className="mt-4 rounded-[20px] bg-white px-4 py-3">
+            <Text className="text-xs font-semibold uppercase tracking-[2px] text-yesilayGreen">Okuma</Text>
+            <Text className="mt-1 text-sm leading-6 text-textMuted">
+              Daha yüksek sütunlar daha güçlü dayanıklılık günlerini, daha kısa sütunlar ise destek alanlarını gösterir.
+            </Text>
+          </View>
         </View>
       </View>
 
