@@ -42,8 +42,28 @@ const SCALE = [
   { value: 5, label: 'Tam katılıyorum' },
 ];
 
+const CATEGORY_COPY = {
+  mental: {
+    label: 'Zihinsel Dayanıklılık',
+    description: 'Stres anında duygusal denge, destek arama ve sakin kalma becerilerini gösterir.',
+  },
+  behavioral: {
+    label: 'Davranışsal Kontrol',
+    description: 'Ekran süresi, dürtü yönetimi ve gece kullanım sınırlarını ölçer.',
+  },
+  environmental: {
+    label: 'Çevresel Faktörler',
+    description: 'Bildirimler, tetikleyiciler ve destek ağıyla kurulan dengeyi yansıtır.',
+  },
+};
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function toPercent(values) {
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return clamp(((average - 1) / 4) * 100, 0, 100);
 }
 
 function classifyRisk(score) {
@@ -57,23 +77,21 @@ function classifyRisk(score) {
 }
 
 function calculateAnalysis(answers) {
-  const normalizedRiskScores = QUESTIONS.map((question, index) => {
-    const answer = answers[index] ?? 1;
-    return question.type === 'risk' ? answer : 6 - answer;
-  });
+  const q1 = answers[0] ?? 1;
+  const q2 = answers[1] ?? 1;
+  const q3 = answers[2] ?? 1;
+  const q4 = answers[3] ?? 1;
+  const q5 = answers[4] ?? 1;
 
-  const resilienceAnswers = QUESTIONS.reduce((result, question, index) => {
-    if (question.type === 'resilience') {
-      result.push(answers[index] ?? 1);
-    }
-    return result;
-  }, []);
+  const categoryScores = {
+    mental: Number(toPercent([6 - q2, q4]).toFixed(0)),
+    behavioral: Number(toPercent([6 - q1, 6 - q3, 6 - q5]).toFixed(0)),
+    environmental: Number(toPercent([q4, 6 - q2, 6 - q5]).toFixed(0)),
+  };
 
-  const rawRisk = normalizedRiskScores.reduce((sum, value) => sum + value, 0) / normalizedRiskScores.length;
-  const riskScore = clamp((rawRisk / 5) * 100, 0, 100);
-  const resilienceScore = resilienceAnswers.length
-    ? clamp((resilienceAnswers.reduce((sum, value) => sum + value, 0) / resilienceAnswers.length / 5) * 100, 0, 100)
-    : 0;
+  const protectionAverage = (categoryScores.mental + categoryScores.behavioral + categoryScores.environmental) / 3;
+  const riskScore = clamp(100 - protectionAverage, 0, 100);
+  const resilienceScore = categoryScores.mental;
   const riskMeta = classifyRisk(riskScore);
 
   return {
@@ -82,6 +100,12 @@ function calculateAnalysis(answers) {
     riskLevel: riskMeta.riskLevel,
     label: riskMeta.label,
     colorKey: riskMeta.colorKey,
+    categoryScores,
+    categoryInsights: {
+      mental: CATEGORY_COPY.mental.description,
+      behavioral: CATEGORY_COPY.behavioral.description,
+      environmental: CATEGORY_COPY.environmental.description,
+    },
     answers: QUESTIONS.map((question, index) => ({
       id: question.id,
       answer: answers[index] ?? 1,

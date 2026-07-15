@@ -9,16 +9,33 @@ const INITIAL_ANALYSIS = {
   riskLevel: 'Düşük',
   label: 'Başlamaya Hazır',
   colorKey: 'low',
+  categoryScores: {
+    mental: 0,
+    behavioral: 0,
+    environmental: 0,
+  },
   answers: [],
 };
 
 export default function App() {
   const [screen, setScreen] = useState('Quiz');
   const [analysis, setAnalysis] = useState(INITIAL_ANALYSIS);
+  const [questStates, setQuestStates] = useState([false, false, false]);
+  const [streak, setStreak] = useState(0);
 
   const handleComplete = (result) => {
     setAnalysis(result);
     setScreen('Dashboard');
+  };
+
+  const handleToggleQuest = (questIndex) => {
+    setQuestStates((currentStates) => {
+      const nextStates = [...currentStates];
+      const nextValue = !nextStates[questIndex];
+      nextStates[questIndex] = nextValue;
+      setStreak((currentStreak) => Math.max(0, currentStreak + (nextValue ? 1 : -1)));
+      return nextStates;
+    });
   };
 
   const handleReset = () => {
@@ -48,7 +65,13 @@ export default function App() {
           {screen === 'Quiz' ? (
             <QuizScreen onComplete={handleComplete} />
           ) : (
-            <DashboardScreen analysis={analysis} onReset={handleReset} />
+            <DashboardScreen
+              analysis={analysis}
+              onReset={handleReset}
+              streak={streak}
+              questStates={questStates}
+              onToggleQuest={handleToggleQuest}
+            />
           )}
         </View>
 
