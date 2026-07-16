@@ -57,7 +57,7 @@ function createEntry(mood, note) {
   };
 }
 
-export default function JournalScreen() {
+export default function JournalScreen({ onEntryAdded, onEntriesLoaded }) {
   const [selectedMood, setSelectedMood] = useState(MOODS[0]);
   const [note, setNote] = useState('');
   const [entries, setEntries] = useState([]);
@@ -69,6 +69,7 @@ export default function JournalScreen() {
       .then((storedEntries) => {
         if (mounted) {
           setEntries(storedEntries);
+          onEntriesLoaded?.(storedEntries);
         }
       })
       .catch(() => {
@@ -104,6 +105,7 @@ export default function JournalScreen() {
     setEntries(nextEntries);
     setNote('');
     await saveEntries(nextEntries);
+    onEntryAdded?.(nextEntry, nextEntries);
     Alert.alert('Günlük', 'Kayıt başarıyla eklendi.');
   };
 

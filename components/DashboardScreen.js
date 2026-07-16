@@ -1,59 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Modal, ScrollView, Text, Pressable, View } from 'react-native';
-
-const THEME = {
-  low: {
-    background: 'bg-emerald-50',
-    accent: 'bg-green-500',
-    border: 'border-green-200',
-    title: 'Düşük Risk',
-    subtitle: 'Koruyucu alışkanlıklarınız güçlü görünüyor.',
-  },
-  medium: {
-    background: 'bg-amber-50',
-    accent: 'bg-amber-500',
-    border: 'border-amber-200',
-    title: 'Orta Risk',
-    subtitle: 'Dijital dengeyi güçlendirmek faydalı olur.',
-  },
-  high: {
-    background: 'bg-red-50',
-    accent: 'bg-red-500',
-    border: 'border-red-200',
-    title: 'Yüksek Risk',
-    subtitle: 'Yakın destek ve net sınırlar öncelik olmalı.',
-  },
-};
-
-const RECOMMENDATIONS = {
-  low: [
-    'Günlük ekran sürenizi koruyucu düzeyde tutmaya devam edin.',
-    'Uyku öncesi 30 dakikalık ekran molasını alışkanlık haline getirin.',
-    'Dijital kullanımınızı planlı aralıklarla kontrol etmeyi sürdürün.',
-  ],
-  medium: [
-    'Bildirimleri belirli saatlerde kapatıp odak blokları oluşturun.',
-    'Akşam saatlerinde telefon kullanımını azaltacak bir rutin belirleyin.',
-    'Stresli anlarda dijital içerik yerine kısa yürüyüş veya nefes egzersizi deneyin.',
-  ],
-  high: [
-    'Güvendiğiniz bir aile üyesi, öğretmen veya rehberlik uzmanı ile sonuçlarınızı paylaşın.',
-    'Gece geç saat kullanımını sınırlamak için cihazı yatak alanından uzak tutun.',
-    'Dijital kaçış yerine destek arama davranışını önceliklendirin ve planlı mola uygulayın.',
-  ],
-};
-
-const RESILIENCE_QUESTS = [
-  'Bugün 30 dk telefondan uzaklaş',
-  'Bir arkadaşınla yüz yüze konuş',
-  '10 sayfa kitap oku',
-];
-
-const BREATHING_STEPS = [
-  { label: 'Nefes Al', duration: 4, accent: 'bg-emerald-500', hint: '4 saniye boyunca yavaşça nefes al' },
-  { label: 'Tut', duration: 7, accent: 'bg-amber-500', hint: '7 saniye boyunca nefesi sakince tut' },
-  { label: 'Nefes Ver', duration: 8, accent: 'bg-sky-500', hint: '8 saniye boyunca kontrollü nefes ver' },
-];
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Easing, Linking, Modal, ScrollView, Text, Pressable, View } from 'react-native';
+import {
+  BREATHING_STEPS,
+  RESILIENCE_QUESTS,
+  RISK_ANALYTICS_TEMPLATES,
+  buildNotificationMessage,
+} from '../utils/mockData';
 
 function getStrengthTone(score) {
   if (score >= 75) {
@@ -162,15 +114,22 @@ export default function DashboardScreen({
   questStates,
   onToggleQuest,
   weeklyProgress = [],
+  smartRecommendation,
+  latestJournalEntry,
+  onSosComplete,
 }) {
   const colorKey = analysis?.colorKey || 'low';
-  const theme = THEME[colorKey];
-  const recommendations = RECOMMENDATIONS[colorKey];
+  const theme = RISK_ANALYTICS_TEMPLATES[colorKey] || RISK_ANALYTICS_TEMPLATES.low;
+  const recommendations = theme.recommendations;
   const riskScore = analysis?.riskScore ?? 0;
   const resilienceScore = analysis?.resilienceScore ?? 0;
   const [supportVisible, setSupportVisible] = useState(false);
   const [breathingStepIndex, setBreathingStepIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(BREATHING_STEPS[0].duration);
+  const [bannerVisible, setBannerVisible] = useState(false);
+  const [bannerMessage, setBannerMessage] = useState('');
+  const bannerTranslateY = useRef(new Animated.Value(-28)).current;
+  const hideBannerTimer = useRef(null);
 
   const categoryRows = useMemo(
     () => [
@@ -223,11 +182,43 @@ export default function DashboardScreen({
     });
   }, [secondsLeft, supportVisible]);
 
+  useEffect(() => () => {
+    if (hideBannerTimer.current) {
+      clearTimeout(hideBannerTimer.current);
+    }
+  }, []);
+
   const currentBreathingStep = BREATHING_STEPS[breathingStepIndex];
   const currentProgress =
     currentBreathingStep.duration === 0
       ? 0
       : 1 - secondsLeft / currentBreathingStep.duration;
+
+  const showSimulatedBanner = () => {
+    setBannerMessage(buildNotificationMessage({ analysis, latestJournalEntry }));
+    setBannerVisible(true);
+    bannerTranslateY.setValue(-28);
+
+    Animated.timing(bannerTranslateY, {
+      toValue: 0,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+
+    if (hideBannerTimer.current) {
+      clearTimeout(hideBannerTimer.current);
+    }
+
+    hideBannerTimer.current = setTimeout(() => {
+      Animated.timing(bannerTranslateY, {
+        toValue: -28,
+        duration: 240,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => setBannerVisible(false));
+    }, 3200);
+  };
 
   const handleCallYedam = async () => {
     try {
@@ -244,22 +235,55 @@ export default function DashboardScreen({
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="pb-8">
+      {bannerVisible ? (
+        <Animated.View
+          className="mb-4 rounded-[24px] border border-yesilayGreen/10 bg-yesilayGreen px-4 py-4 shadow-soft"
+          style={{ transform: [{ translateY: bannerTranslateY }] }}
+        >
+          <Text className="text-[11px] font-semibold uppercase tracking-[3px] text-white/80">Yeşilay Bildirimi</Text>
+          <Text className="mt-2 text-sm font-semibold leading-6 text-white">{bannerMessage}</Text>
+        </Animated.View>
+      ) : null}
+
       <View className={`rounded-[28px] border ${theme.border} ${theme.background} px-5 py-5 shadow-soft`}>
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-xs font-semibold uppercase tracking-[2px] text-yesilayGreen">
               Sonuç Paneli
             </Text>
-            <Text className="mt-2 text-3xl font-bold text-textMain">{theme.title}</Text>
+            <Text className="mt-2 text-3xl font-bold text-textMain">{theme.riskLevel}</Text>
           </View>
           <View className="items-end">
-            <Text className="text-xs font-semibold uppercase tracking-[2px] text-textMuted">
-              Günlük Seri
-            </Text>
-            <Text className="mt-1 text-2xl font-black text-yesilayGreen">{streak}</Text>
+            <Pressable onPress={showSimulatedBanner} className="rounded-full bg-white px-3 py-2">
+              <Text className="text-[10px] font-bold uppercase tracking-[1.5px] text-yesilayGreen">
+                Simüle Bildirim Test Et
+              </Text>
+            </Pressable>
+            <View className="mt-2 items-end">
+              <Text className="text-xs font-semibold uppercase tracking-[2px] text-textMuted">Günlük Seri</Text>
+              <Text className="mt-1 text-2xl font-black text-yesilayGreen">{streak}</Text>
+            </View>
           </View>
         </View>
-        <Text className="mt-2 text-sm leading-6 text-textMuted">{theme.subtitle}</Text>
+        <Text className="mt-2 text-sm leading-6 text-textMuted">
+          {analysis?.riskLevel === 'Yüksek Risk'
+            ? 'Yakın destek ve net sınırlar öncelik olmalı.'
+            : analysis?.riskLevel === 'Orta Risk'
+              ? 'Dijital dengeyi güçlendirmek faydalı olur.'
+              : 'Koruyucu alışkanlıklarınız güçlü görünüyor.'}
+        </Text>
+
+        <View className="mt-4 rounded-[24px] border border-white/70 bg-white px-4 py-4">
+          <Text className="text-xs font-semibold uppercase tracking-[2px] text-yesilayGreen">Günün Akıllı Tavsiyesi</Text>
+          <Text className="mt-2 text-lg font-bold text-textMain">{smartRecommendation?.title || 'Günün Akıllı Tavsiyesi'}</Text>
+          <Text className="mt-2 text-sm leading-6 text-textMuted">{smartRecommendation?.text}</Text>
+          <View className="mt-3 flex-row items-center justify-between">
+            <Text className="text-xs font-semibold uppercase tracking-[2px] text-textMuted">{smartRecommendation?.tag}</Text>
+            <View className={`rounded-full px-3 py-2 ${smartRecommendation?.accent || theme.accent}`}>
+              <Text className="text-xs font-bold text-white">Anlık</Text>
+            </View>
+          </View>
+        </View>
 
         <Pressable onPress={() => setSupportVisible(true)} className="mt-5 rounded-[26px] bg-yesilayGreen px-5 py-4 shadow-soft">
           <Text className="text-center text-base font-bold text-white">Destek Lazım / Dürtü Geldi</Text>
@@ -394,6 +418,15 @@ export default function DashboardScreen({
                 </Text>
                 <Pressable onPress={handleCallYedam} className="mt-4 rounded-3xl bg-yesilayGreen px-5 py-4">
                   <Text className="text-center text-base font-bold text-white">115'i Ara</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    onSosComplete?.();
+                    setSupportVisible(false);
+                  }}
+                  className="mt-3 rounded-3xl border border-yesilayGreen/15 bg-white px-5 py-4"
+                >
+                  <Text className="text-center text-base font-bold text-yesilayGreen">Tamamladım ve Rozeti Güncelle</Text>
                 </Pressable>
                 <View className="mt-4 rounded-[22px] bg-yesilayLight px-4 py-4">
                   <Text className="text-sm font-semibold text-textMain">YEDAM Danışma Hattı</Text>

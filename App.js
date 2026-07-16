@@ -4,26 +4,24 @@ import QuizScreen from './components/QuizScreen';
 import DashboardScreen from './components/DashboardScreen';
 import JournalScreen from './components/JournalScreen';
 import AIAssistantScreen from './components/AIAssistantScreen';
-
-const INITIAL_ANALYSIS = {
-  riskScore: 0,
-  resilienceScore: 0,
-  riskLevel: 'Düşük',
-  label: 'Başlamaya Hazır',
-  colorKey: 'low',
-  categoryScores: {
-    mental: 0,
-    behavioral: 0,
-    environmental: 0,
-  },
-  answers: [],
-};
+import ProfileScreen from './components/ProfileScreen';
+import {
+  INITIAL_ANALYSIS,
+  buildParticipationSummary,
+  buildSmartRecommendation,
+  buildWeeklyProgressFromAnalysis,
+  deriveBadgeStates,
+} from './utils/mockData';
 
 export default function App() {
   const [screen, setScreen] = useState('Quiz');
   const [analysis, setAnalysis] = useState(INITIAL_ANALYSIS);
   const [questStates, setQuestStates] = useState([false, false, false]);
   const [streak, setStreak] = useState(0);
+  const [profileName, setProfileName] = useState('Kullanıcı');
+  const [journalEntries, setJournalEntries] = useState([]);
+  const [latestJournalEntry, setLatestJournalEntry] = useState(null);
+  const [sosCompletionCount, setSosCompletionCount] = useState(0);
   const [weeklyProgress, setWeeklyProgress] = useState([
     { day: 'Pzt', value: 40 },
     { day: 'Sal', value: 46 },
@@ -34,12 +32,24 @@ export default function App() {
     { day: 'Paz', value: 68 },
   ]);
 
+  const smartRecommendation = useMemo(
+    () => buildSmartRecommendation({ analysis, latestJournalEntry, streak }),
+    [analysis, latestJournalEntry, streak],
+  );
+
+  const badges = useMemo(
+    () => deriveBadgeStates({ sosCompletionCount, streak, journalEntries }),
+    [sosCompletionCount, streak, journalEntries],
+  );
+
+  const participationSummary = useMemo(
+    () => buildParticipationSummary({ streak, journalEntries, sosCompletionCount }),
+    [streak, journalEntries, sosCompletionCount],
+  );
+
   const handleComplete = (result) => {
     setAnalysis(result);
-    const weeklyValue = Math.round(
-      ((result.categoryScores.mental + result.categoryScores.behavioral + result.categoryScores.environmental) / 3),
-    );
-    setWeeklyProgress((current) => [...current.slice(1), { day: 'Bugün', value: weeklyValue }]);
+    setWeeklyProgress((current) => buildWeeklyProgressFromAnalysis(result, current));
     setScreen('Dashboard');
   };
 
@@ -58,6 +68,20 @@ export default function App() {
     setScreen('Quiz');
   };
 
+  const handleJournalEntriesLoaded = (entries) => {
+    setJournalEntries(entries);
+    setLatestJournalEntry(entries[0] || null);
+  };
+
+  const handleJournalEntryAdded = (nextEntry, nextEntries) => {
+    setJournalEntries(nextEntries);
+    setLatestJournalEntry(nextEntry);
+  };
+
+  const handleSosComplete = () => {
+    setSosCompletionCount((currentCount) => currentCount + 1);
+  };
+
   const activeTabLabel = useMemo(() => {
     switch (screen) {
       case 'Quiz':
@@ -68,6 +92,8 @@ export default function App() {
         return 'Günlük';
       case 'AI':
         return 'AI Asistanı';
+      case 'Profile':
+        return 'Profil';
       default:
         return 'Test';
     }
@@ -89,15 +115,15 @@ export default function App() {
           <Text className="mt-2 text-sm leading-5 text-textMuted">
             Dijital alışkanlıklarınızı ve psikolojik dayanıklılığınızı hızlıca ölçün, size özel önerileri görün.
           </Text>
+          <Text className="mt-2 text-sm font-semibold text-yesilayGreen">Profil: {profileName}</Text>
+          <Text className="mt-1 text-xs text-textMuted">{participationSummary}</Text>
           <Text className="mt-3 text-xs font-semibold uppercase tracking-[2px] text-textMuted">
             Aktif sekme: {activeTabLabel}
           </Text>
         </View>
 
         <View className="flex-1">
-          {screen === 'Quiz' ? (
-            <QuizScreen onComplete={handleComplete} />
-          ) : null}
+          {screen === 'Quiz' ? <QuizScreen onComplete={handleComplete} /> : null}
 
           {screen === 'Dashboard' ? (
             <DashboardScreen
@@ -107,12 +133,32 @@ export default function App() {
               questStates={questStates}
               onToggleQuest={handleToggleQuest}
               weeklyProgress={weeklyProgress}
+              latestJournalEntry={latestJournalEntry}
+              smartRecommendation={smartRecommendation}
+              onSosComplete={handleSosComplete}
             />
           ) : null}
 
-          {screen === 'Journal' ? <JournalScreen /> : null}
+          {screen === 'Journal' ? (
+            <JournalScreen onEntryAdded={handleJournalEntryAdded} onEntriesLoaded={handleJournalEntriesLoaded} />
+          ) : null}
 
           {screen === 'AI' ? <AIAssistantScreen /> : null}
+
+          {screen === 'Profile' ? (
+            <ProfileScreen
+              profileName={profileName}
+              onProfileNameChange={setProfileName}
+              analysis={analysis}
+              badges={badges}
+              streak={streak}
+              journalEntries={journalEntries}
+              sosCompletionCount={sosCompletionCount}
+              latestJournalEntry={latestJournalEntry}
+              weeklyProgress={weeklyProgress}
+              participationSummary={participationSummary}
+            />
+          ) : null}
         </View>
 
         <View className="my-4 flex-row items-center justify-between rounded-[28px] border border-yesilayGreen/10 bg-white/95 px-3 py-3 shadow-soft">
@@ -146,6 +192,14 @@ export default function App() {
           >
             <Text className={`text-center text-[11px] font-bold ${screen === 'AI' ? 'text-white' : 'text-yesilayGreen'}`}>
               AI Asistanı
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setScreen('Profile')}
+            className={`flex-1 mx-1 rounded-2xl border px-3 py-3 ${screen === 'Profile' ? 'border-yesilayGreen bg-yesilayGreen' : 'border-yesilayGreen/10 bg-yesilayLight'}`}
+          >
+            <Text className={`text-center text-xs font-bold ${screen === 'Profile' ? 'text-white' : 'text-yesilayGreen'}`}>
+              Profil
             </Text>
           </Pressable>
         </View>
